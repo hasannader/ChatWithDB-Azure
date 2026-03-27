@@ -105,12 +105,11 @@ DB_chat_clone/
 ├── chat_db_gemini.py       # Alternative version using Google Gemini API
 ├── azure_oai_4o.py         # Azure OpenAI client configuration
 ├── deploy.py               # Database deployment script for Railway
+├── databases/              # Contains database files and configurations
 ├── requirements.txt        # Python dependencies
 ├── .env                    # Environment variables (not included in repo)
 └── README.md               # This file
 ```
-
-## Available Versions
 
 The project provides two versions with different AI backends:
 
@@ -118,24 +117,6 @@ The project provides two versions with different AI backends:
 - **chat_db_gemini.py** (Alternative): Uses Google's Gemini API as an alternative backend for the same functionality
 
 Both versions support the same database operations and UI features. Choose based on your API preferences and availability.
-
-## Database Deployment
-
-### Using Railway for Database Hosting
-
-The `deploy.py` script is designed to deploy your PostgreSQL database to [Railway](https://railway.app/), a modern platform for deploying applications and databases.
-
-**Features:**
-- Automated database deployment to Railway platform
-- Easy configuration and setup
-- Seamless integration with the chatbot application
-
-**To deploy your database:**
-```bash
-python deploy.py
-```
-
-For more information about Railway, visit [railway.app](https://railway.app/)
 
 ## Key Features Explained
 
