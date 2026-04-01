@@ -13,12 +13,12 @@ DB_URL = os.getenv("DB_URL")
 AZURE_KEY = os.getenv("AZURE_KEY")
 
 
+
 llm = AzureOpenAI(
     azure_endpoint="https://gbgacademy-genai-4.openai.azure.com/",
     api_key=AZURE_KEY,
     api_version="2024-12-01-preview",
 )
-
 
 
 def extract_years_from_dates(invoice_dates):
@@ -29,7 +29,6 @@ def extract_years_from_dates(invoice_dates):
     
     Returns sorted list of unique years as strings.
     """
-    import re
     
     if not invoice_dates:
         return []
@@ -218,36 +217,7 @@ def run_query(sql):
         except Exception as e:
             return str(e)
         
-def get_chat_response(question, sql, data):
-    prompt = f"""
-You are a professional Data Analyst communicating with a client about their data.
 
-User Question: {question}
-Generated SQL Query: {sql}
-Data retrieved from the query:
-{data}
-
-Task:
-- Answer the user's question in a natural language format based on the data retrieved
-- Provide clear, professional insights and interpretations
-- Highlight important patterns, trends, or anomalies if present
-- If the data is empty, say "No results found for this query"
-- Be thorough and provide comprehensive analysis
-- Keep your response under 500 tokens. Be concise but thorough.
-"""
-    response = llm.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=500
-    )
-    answer = response.choices[0].message.content.strip()
-    
-    # Extract table and column info from SQL
-    table_col_info = extract_table_column_info(sql)
-    if table_col_info:
-        answer += f"\n\n**Source Information:**\n{table_col_info}"
-    
-    return answer
 
 
 def extract_table_column_info(sql):
@@ -280,68 +250,238 @@ def extract_table_column_info(sql):
     return " | ".join(info_parts) if info_parts else ""
 
 
+
+
 def classify_question(question, schema):
     """
-    Classify whether the user's question is database-related, system-related, or irrelevant.
-    Returns: 'DATABASE', 'SYSTEM', or 'IRRELEVANT'
+    Classify whether the user's question is:
+    - DATABASE
+    - CHAT
+    - GENERAL
+
+    DATABASE = asks about Chinook database data
+    CHAT = greetings, thanks, vague help, assistant capability
+    GENERAL = unrelated factual/general world questions
     """
     prompt = f"""
-You are an intelligent question classifier for a Database Chatbot system.
+You are an intent classifier for a Chinook database chatbot.
 
-Here is the database schema available:
+The chatbot is ONLY meant to:
+1) Chat casually with the user
+2) Answer questions about the Chinook database
+
+Here is the database schema:
 {schema}
 
-User Question: {question}
+User Question:
+{question}
 
-Classify this question into ONE of these categories:
+Classify the user message into EXACTLY ONE of these 3 categories:
 
-1. DATABASE_QUESTION - The user is asking for data/insights from the available databases
-   Examples: "How many orders were placed?", "Show me sales by region", "What's the average price?"
+1. CHAT
+Use CHAT ONLY if the message is clearly:
+- greeting (hi, hello, good morning)
+- thanks or appreciation
+- asking what the assistant can do
+- vague help like "help", "can you help me?"
+- casual conversational message not asking for outside factual knowledge
 
-2. SYSTEM_QUESTION - The user is asking about how THIS chatbot system works, its features, or capabilities
-   Examples: "How does this system work?", "What databases are available?", "Can you help me analyze data?", "What can you do?"
+Examples:
+- "hi"
+- "hello"
+- "thanks"
+- "what can you do?"
+- "help me"
 
-3. IRRELEVANT_QUESTION - The user is asking something completely unrelated to this database system
-   Examples: "What's 2+2?", "Tell me a joke", "What's the weather?", "How to bake a cake?"
+2. DATABASE
+Use DATABASE if the user is asking about:
+- data that may exist in the Chinook database
+- customers, invoices, artists, albums, tracks, sales, employees, countries, genres, etc.
+- analytics, counts, comparisons, trends, top/bottom values
 
-Respond with ONLY the classification: "DATABASE_QUESTION", "SYSTEM_QUESTION", or "IRRELEVANT_QUESTION"
+Examples:
+- "how many customers are in USA?"
+- "top 5 artists"
+- "which country has the most invoices?"
+- "show me albums by Queen"
+
+3. GENERAL
+Use GENERAL if the question is NOT chat and NOT about the Chinook database.
+This includes:
+- celebrities
+- weather
+- news
+- math
+- coding theory
+- jokes
+- science
+- history
+- religion
+- politics
+- sports
+- general world knowledge
+
+Examples:
+- "who is mohamed salah?"
+- "what's the weather?"
+- "tell me a joke"
+- "what is python?"
+- "what is machine learning?"
+
+Important rules:
+- If it asks for specific data from the database → DATABASE
+- If it is just friendly conversation → CHAT
+- If it is asking for outside/general knowledge → GENERAL
+
+Respond with ONLY ONE word:
+DATABASE
+CHAT
+GENERAL
 """
+
     response = llm.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=100
+        max_tokens=50
     )
+
     result = response.choices[0].message.content.strip().upper()
-    
+
     if "DATABASE" in result:
         return "DATABASE"
-    elif "SYSTEM" in result:
-        return "SYSTEM"
+    elif "CHAT" in result:
+        return "CHAT"
     else:
-        return "IRRELEVANT"
 
+        return "GENERAL"
+    
 
 
 def answer_general_question(question):
     """
-    Answer system-related questions about this chatbot application.
+    Politely refuse unrelated general-purpose questions.
     """
     prompt = f"""
-You are a helpful assistant for a Database Chatbot system that helps users query PostgreSQL databases using natural language.
+You are a friendly assistant inside a Chinook database chat application.
+
+The user asked:
+{question}
+
+This question is NOT related to the database system and should NOT be answered.
+
+Your job:
+- Politely and warmly explain that you are only meant to help with the Chinook database
+- Do NOT answer the user's actual question
+- Sound friendly, natural, and non-robotic
+- Keep it short and helpful
+- Encourage the user to ask about the database instead
+
+Examples of good style:
+- "I’m mainly here to help with the Chinook database, so I can’t really answer that one. But feel free to ask me about customers, invoices, artists, albums, or sales."
+- "That’s outside my scope — I’m focused on the Chinook database only. If you want, ask me something about the data and I’ll help."
+
+Do NOT mention SQL unless necessary.
+Do NOT answer the general question itself.
+"""
+
+    response = llm.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200
+    )
+
+    return response.choices[0].message.content.strip()
+
+
+def answer_chat_question(question):
+    """
+    Handle greetings, thanks, vague help, and capability questions.
+    """
+    prompt = f"""
+You are a friendly conversational assistant for a Chinook database chat application.
+
+Your role is to chat naturally with the user when their message does NOT require querying the database.
+
+Behavior guidelines:
+
+1. Greetings & small talk
+   - Greet the user warmly
+   - Be friendly, polite, and approachable
+
+2. Offer help proactively
+   - Mention that you can help explore the Chinook database
+   - Encourage questions about artists, albums, tracks, customers, invoices, employees, etc.
+
+3. Stay concise
+   - Keep responses short and conversational
+   - Avoid long explanations unless asked
+
+4. Do NOT generate or mention SQL
+   - If the user is chatting casually, never talk about technical details
+
+5. Handle vague questions
+   - If user says "help" or "can you help me?" → guide them gently
+
+6. Handle appreciation
+   - If user says "thanks" → respond politely
+
+7. Handle capability questions
+   - If user asks what you can do → explain briefly
+
+Tone:
+- Friendly
+- Supportive
+- Natural
+- Non-robotic
+- Professional but casual
+
+User message:
+{question}
+
+Respond naturally and briefly.
+"""
+
+    response = llm.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200
+    )
+
+    return response.choices[0].message.content.strip()
+
+
+
+def get_chat_response(question, sql, data):
+    prompt = f"""
+You are a friendly data assistant helping a user understand results from the Chinook database.
 
 User Question: {question}
+Generated SQL Query: {sql}
+Data retrieved from the query:
+{data}
 
-Provide a clear, comprehensive answer about how this database chatbot system works, its features, and capabilities.
-Focus on helping the user understand how to use this tool effectively.
-Keep your response under 500 tokens. Be concise but thorough.
+Task:
+- Answer the question in a natural, human-like sentence
+- Start with the answer directly, but phrase it conversationally
+- Avoid robotic or fragmented sentences
+- Do NOT start with phrases like "Based on the data" or "The query shows"
+- Keep it concise and smooth
 """
+
     response = llm.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=500
     )
-    return response.choices[0].message.content.strip()
 
+    answer = response.choices[0].message.content.strip()
+
+    # Extract table and column info from SQL
+    table_col_info = extract_table_column_info(sql)
+    if table_col_info:
+        answer += f"\n\n**Source Information:**\n{table_col_info}"
+
+    return answer
 
 def main():
     # Main app logic
@@ -352,7 +492,7 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("What is up?"):
+    if prompt := st.chat_input("Ask anything about the Chinook database..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -368,36 +508,45 @@ def main():
                     st.write(f"**Found years:** {', '.join(years)}")
                     
             else:
-                # Regular flow: Classify the question
+                # Regular flow: classify the question
                 question_type = classify_question(prompt, schema)
-                
+
                 if question_type == "DATABASE":
                     # Database-related question - proceed with SQL generation
                     st.write("📊 *Analyzing your database question...*")
                     sql_query = get_sql_from_openai(prompt, schema)
-                    
+
                     with st.expander("Generated SQL Query"):
                         st.code(sql_query, language="sql")
-                        
+
                     query_result = run_query(sql_query)
-                    
+
                     if isinstance(query_result, list):
                         with st.expander("Query Result"):
                             st.table(query_result)
-                        response = get_chat_response(prompt, sql_query, query_result)
-                    else:
-                        response = f"Sorry, I encountered an error: {query_result}"
-                        
-                elif question_type == "SYSTEM":
-                    # System-related question - answer about how this chatbot works
-                    st.write("ℹ️ *Answering your system question...*")
-                    response = answer_general_question(prompt)
-                    
-                else:
-                    # Irrelevant question - not related to this system
-                    st.write("❌ *This question is not relevant to this database system*")
-                    response = "I'm a database chatbot designed to help you analyze data in this database system. Your question doesn't relate to this system or the data available. Please ask me questions about:\n- Data in the database (tables, records, analytics)\n- How this database system works\n- Features and capabilities of this chatbot"
 
+                        if len(query_result) == 0:
+                            response = (
+                                "I couldn’t find matching data for that in the Chinook database. "
+                                "Try rephrasing it or asking about customers, invoices, artists, albums, tracks, or sales."
+                            )
+                        else:
+                            response = get_chat_response(prompt, sql_query, query_result)
+                    else:
+                        response = (
+                            "I couldn’t answer that from the Chinook database. "
+                            "Try rephrasing your question or asking about customers, invoices, artists, albums, tracks, or sales."
+                        )
+
+                elif question_type == "CHAT":
+                    # Friendly conversational messages
+                    st.write("💬 *Chatting with you...*")
+                    response = answer_chat_question(prompt)
+
+                else:
+                    # General-purpose unrelated questions
+                    st.write("🚫 *That’s outside this chatbot’s scope*")
+                    response = answer_general_question(prompt)
             st.markdown(response)
             
         st.session_state.messages.append({"role": "assistant", "content": response})
