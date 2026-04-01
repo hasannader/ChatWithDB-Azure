@@ -1,18 +1,24 @@
 import streamlit as st
-from azure_oai_4o import build_client
 from openai import AzureOpenAI
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
+import re
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Configuration Constants
 DB_URL = os.getenv("DB_URL")
+AZURE_KEY = os.getenv("AZURE_KEY")
 
-client = build_client()
-llm = client
+
+llm = AzureOpenAI(
+    azure_endpoint="https://gbgacademy-genai-4.openai.azure.com/",
+    api_key=AZURE_KEY,
+    api_version="2024-12-01-preview",
+)
+
 
 
 def extract_years_from_dates(invoice_dates):
@@ -314,13 +320,6 @@ Respond with ONLY the classification: "DATABASE_QUESTION", "SYSTEM_QUESTION", or
     else:
         return "IRRELEVANT"
 
-
-def is_database_question(question, schema):
-    """
-    Classify whether the user's question requires database querying.
-    Returns True if it's a database-related question, False otherwise.
-    """
-    return classify_question(question, schema) == "DATABASE"
 
 
 def answer_general_question(question):
