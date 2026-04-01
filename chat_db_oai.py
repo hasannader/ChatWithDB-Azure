@@ -1,10 +1,10 @@
 import streamlit as st
-from azure_oai_4o import build_client
+from Build_Client import build_client
 from openai import AzureOpenAI
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
-
+from rag_fewshots import query_relevant_chunks
 # Load environment variables from .env file
 load_dotenv()
 
@@ -137,36 +137,71 @@ st.title("Chat with DB")
 def get_engine():
     return create_engine(DB_URL)
 
-# Function to Retrieve Database Schema for Context in Prompts
+#==============================================================================================================================
+# Function to Retrieve Database Schema (tables name, columns name, data types and, an example for each value) for Context in Prompts
 @st.cache_data
 def get_schema():
-
-    engine=get_engine()
+    engine = get_engine()
     inspector_query = text("""
-                        SELECT table_name, column_name
-                        FROM information_schema.columns 
-                        WHERE table_schema = 'public'
-                        ORDER BY table_name, ordinal_position;
-                     """)
-    
+                        select table_name, column_name, data_type 
+                        from information_schema.columns 
+                        where table_schema = 'public'   
+                        order by table_name, ordinal_position;          
+                        """
+                        )  
     schema_str = ""
-
     try:
         with engine.connect() as conn:
-            result = conn.execute(inspector_query)
+            result = conn.execute(inspector_query) 
             current_table = ""
-            for row in result:
-                table_name, column_name = row[0], row[1]
-                if table_name != current_table:
-                    schema_str += f"\nTable: {table_name}\nColumns: "
+            for row in result :
+                table_name, column_name, data_type = row[0], row[1], row[2]
+
+                if table_name != current_table :
+                    schema_str += f"\nTable : {table_name}\n Columns: "
                     current_table = table_name
-                schema_str += f"{column_name}, "
+
+                    # get one sample row.
+                    sample_query = text(f'SELECT "{column_name}" FROM "{table_name}" LIMIT 1')
+                    sample_row = conn.execute(sample_query).fetchone()
+                    sample_row = sample_row if sample_row else None
+
+                # Get value for this column from sample row
+                sample_value = None
+                if sample_row:
+                    sample_value = sample_row[column_name]
+
+                schema_str += f"   - {column_name} ({data_type}) | example: {sample_value}\n"  
+                 
     except Exception as e:
-        st.error(f"ERROR reading schema: {e}")
-    
+        print(f"an error accur {e} ")
+   
     return schema_str
 
-def get_sql_from_openai(question, schema):
+#========================================================================================================================
+def get_description() -> str:
+    schema = get_schema()
+    prompt=f"""
+        you are an expert postgressSQL data analyst.
+        here is the database schema contain tables name, columns name, data type for each column and, an example value for each column in the schema: {schema}.
+        Your task:
+        1- Write a 2–3 sentence description for EACH column in EACH table.
+        2- The description should be based on the column name, data type and the example value provided in the schema.
+        3- The description should be concise and informative, it should give a clear idea about the content
+    """
+    response = llm.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+   
+    desc = response.choices[0].message.content
+
+    return desc
+
+
+#========================================================================================================================
+
+def get_sql_from_openai(question, schema, description, relevant_chunks):
     prompt = f"""
 You are a professional Data Analyst with deep expertise in these databases and PostgreSQL.
 
@@ -176,9 +211,11 @@ You understand:
 - The business context and data semantics
 - How to extract meaningful insights from complex datasets
 
-Here is the database schema you are working with:
+here is the database schema contain tables name, columns name, data type for each column and, 
+an example value for each column in the schema, you are working with:
 {schema}
 
+here is the description of each column in the databas: {description}
 Your task:
 1- Write a PostgreSQL query to answer the following question: {question}
 2- IMPORTANT: the tables were created via pandas.
@@ -189,6 +226,9 @@ Your task:
    - Example query: SELECT DISTINCT (regexp_matches("InvoiceDate", '(\\d{{4}})','g'))[1]::integer AS year FROM "Invoice" WHERE "CustomerId" = 23
 4- Ensure the query is optimized and handles edge cases properly.
 5- Return ONLY the SQL query, without any explanation or comments.
+
+RELEVANT EXAMPLES (for style guidance only - adapt, don't copy):
+{relevant_chunks}
 """
 
     # Generate content from the model
@@ -202,6 +242,7 @@ Your task:
     clean_sql = response.choices[0].message.content.replace("```sql", "").replace("```", "").strip()
 
     return clean_sql
+#============================================================================================================
 
 def run_query(sql):
     engine = get_engine()
@@ -360,7 +401,7 @@ def main():
 
         with st.chat_message("assistant"):
             schema = get_schema()
-            
+            description = get_description()
             # Check for special case: years by country question
             if is_year_by_country_question(prompt):
                 st.write("📅 *Extracting invoice years by country...*")
@@ -375,7 +416,9 @@ def main():
                 if question_type == "DATABASE":
                     # Database-related question - proceed with SQL generation
                     st.write("📊 *Analyzing your database question...*")
-                    sql_query = get_sql_from_openai(prompt, schema)
+                    relevant_chunks = query_relevant_chunks(prompt)
+                    [print(ch) for ch in relevant_chunks]
+                    sql_query = get_sql_from_openai(prompt, schema, description, relevant_chunks)
                     
                     with st.expander("Generated SQL Query"):
                         st.code(sql_query, language="sql")

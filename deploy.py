@@ -10,7 +10,7 @@ load_dotenv()
 engine = create_engine(os.getenv("DB_URL"))
 
 # PostgreSQL connection string
-# engine = create_engine("")
+#engine = create_engine("postgresql://postgres:NFarCNHhYpAuesiKCCkkguTWFIyiKqIQ@interchange.proxy.rlwy.net:22483/railway", pool_pre_ping=True)
 
 file_list = [
     "databases/Album.csv", "databases/Artist.csv", "databases/Customer.csv", "databases/Employee.csv", 

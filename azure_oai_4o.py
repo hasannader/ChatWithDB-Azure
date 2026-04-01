@@ -1,5 +1,5 @@
 import streamlit as st
-from azure_oai_4o import build_client
+# from azure_oai_4o import build_client
 from openai import AzureOpenAI
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
@@ -11,8 +11,8 @@ load_dotenv()
 # Configuration Constants
 DB_URL = os.getenv("DB_URL")
 
-client = build_client()
-llm = client
+# client = build_client()
+# llm = client
 
 
 def extract_years_from_dates(invoice_dates):
