@@ -144,34 +144,48 @@ st.title("Chat with DB")
 def get_engine():
     return create_engine(DB_URL)
 
-# Function to Retrieve Database Schema for Context in Prompts
+##########################################################################
+
+# Function to Retrieve Database Schema (tables name, columns name, data types and, an example for each value) for Context in Prompts
 @st.cache_data
 def get_schema():
-
-    engine=get_engine()
+    engine = get_engine()
     inspector_query = text("""
-                        SELECT table_name, column_name
-                        FROM information_schema.columns 
-                        WHERE table_schema = 'public'
-                        ORDER BY table_name, ordinal_position;
-                     """)
-    
+                        select table_name, column_name, data_type 
+                        from information_schema.columns 
+                        where table_schema = 'public'   
+                        order by table_name, ordinal_position;          
+                        """
+                        )  
     schema_str = ""
-
     try:
         with engine.connect() as conn:
-            result = conn.execute(inspector_query)
+            result = conn.execute(inspector_query) 
             current_table = ""
-            for row in result:
-                table_name, column_name = row[0], row[1]
-                if table_name != current_table:
-                    schema_str += f"\nTable: {table_name}\nColumns: "
+            for row in result :
+                table_name, column_name, data_type = row[0], row[1], row[2]
+
+                if table_name != current_table :
+                    schema_str += f"\nTable : {table_name}\n Columns: "
                     current_table = table_name
-                schema_str += f"{column_name}, "
+
+                    # get one sample row.
+                    sample_query = text(f'SELECT "{column_name}" FROM "{table_name}" LIMIT 1')
+                    sample_row = conn.execute(sample_query).fetchone()
+                    sample_row = sample_row if sample_row else None
+
+                # Get value for this column from sample row
+                sample_value = None
+                if sample_row:
+                    sample_value = sample_row[column_name]
+
+                schema_str += f"   - {column_name} ({data_type}) | example: {sample_value}\n"  
+                 
     except Exception as e:
-        st.error(f"ERROR reading schema: {e}")
-    
+        print(f"an error accur {e} ")
+   
     return schema_str
+################################################################################# 
 def get_sql_from_openai(question, schema, past_messages):
     # Fetch the conversation history to include it in the Prompt as context
     history_context = get_conversation_history(past_messages)
@@ -184,7 +198,8 @@ You understand:
 - Best practices for SQL query optimization
 - How to answer user questions accurately from database data
 
-Here is the database schema:
+here is the database schema contain tables name, columns name, data type for each column and, 
+an example value for each column in the schema, you are working with:
 {schema}
 
 ---
