@@ -173,39 +173,62 @@ def get_schema():
 
 def get_sql_from_openai(question, schema):
     prompt = f"""
-You are a professional Data Analyst with deep expertise in these databases and PostgreSQL.
+You are a professional Data Analyst with deep expertise in PostgreSQL and database querying.
 
 You understand:
-- The structure and relationships within these databases
-- Best practices for data analysis and SQL query optimization
-- The business context and data semantics
-- How to extract meaningful insights from complex datasets
+- The structure and relationships within the database
+- Best practices for SQL query optimization
+- How to answer user questions accurately from database data
 
-Here is the database schema you are working with:
+Here is the database schema:
 {schema}
 
 Your task:
-1- Write a PostgreSQL query to answer the following question: {question}
-2- IMPORTANT: the tables were created via pandas.
-   - If columns or tables names are MixedCase, use double quotes around them.
-3- CRITICAL: For InvoiceDate (format: 'M/D/YYYY  hh:mm:ss AM/PM'):
+1. Write a PostgreSQL query to answer this user question:
+{question}
+
+2. IMPORTANT: the tables were created via pandas.
+   - If table names or column names are MixedCase, use double quotes around them.
+
+3. CRITICAL: For InvoiceDate (format: 'M/D/YYYY  hh:mm:ss AM/PM'):
    - To extract year: Use regex → (regexp_matches("InvoiceDate", '(\\d{{4}})','g'))[1]::integer
    - To filter by year: Use LIKE → WHERE "InvoiceDate" LIKE '%2009%'
-   - Example query: SELECT DISTINCT (regexp_matches("InvoiceDate", '(\\d{{4}})','g'))[1]::integer AS year FROM "Invoice" WHERE "CustomerId" = 23
-4- Ensure the query is optimized and handles edge cases properly.
-5- Return ONLY the SQL query, without any explanation or comments.
+   - Example:
+     SELECT DISTINCT (regexp_matches("InvoiceDate", '(\\d{{4}})','g'))[1]::integer AS year
+     FROM "Invoice"
+     WHERE "CustomerId" = 23
+
+4. LIMIT RULES (VERY IMPORTANT):
+   - If the user asks for a specific number like:
+     "top 3", "first 5", "highest 7", "show 20", "give me 15"
+     → use LIMIT with that exact number.
+   - If the user clearly asks for ALL results using words like:
+     "all", "everything", "list all", "show all"
+     → DO NOT use LIMIT.
+   - If the user does NOT specify how many rows they want
+     → use LIMIT 10 by default.
+   - If the question is an aggregate query that naturally returns one row
+     (like COUNT, SUM, AVG, MAX, MIN)
+     → do NOT force LIMIT 10 unless needed.
+
+5. If the user asks for "top", "highest", "best", "most", "largest"
+   → make sure to ORDER BY appropriately in descending order.
+
+6. If the user asks for "lowest", "least", "smallest", "bottom"
+   → make sure to ORDER BY appropriately in ascending order.
+
+7. Ensure the query is optimized and handles edge cases properly.
+
+8. Return ONLY the SQL query, with no explanation and no markdown.
 """
 
-    # Generate content from the model
     response = llm.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=2048
     )
 
-    # Clean the markdown formatting (backticks) from the response
     clean_sql = response.choices[0].message.content.replace("```sql", "").replace("```", "").strip()
-
     return clean_sql
 
 def run_query(sql):
