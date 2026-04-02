@@ -186,7 +186,26 @@ def get_schema():
    
     return schema_str
 ################################################################################# 
-def get_sql_from_openai(question, schema, past_messages):
+def get_description() -> str:
+    schema = get_schema()
+    prompt=f"""
+        you are an expert postgressSQL data analyst.
+        here is the database schema contain tables name, columns name, data type for each column and, an example value for each column in the schema: {schema}.
+        Your task:
+        1- Write a 2–3 sentence description for EACH column in EACH table.
+        2- The description should be based on the column name, data type and the example value provided in the schema.
+        3- The description should be concise and informative, it should give a clear idea about the content
+    """
+    response = llm.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+   
+    desc = response.choices[0].message.content
+
+    return desc
+###############################################################################
+def get_sql_from_openai(question, schema, past_messages, description):
     # Fetch the conversation history to include it in the Prompt as context
     history_context = get_conversation_history(past_messages)
     
@@ -201,6 +220,8 @@ You understand:
 here is the database schema contain tables name, columns name, data type for each column and, 
 an example value for each column in the schema, you are working with:
 {schema}
+
+here is the description of each column in the databas: {description}
 
 ---
 {history_context}
@@ -565,6 +586,7 @@ def main():
 
         with st.chat_message("assistant"):
             schema = get_schema()
+            description = get_description()
             
             # Check for special case: years by country question
             if is_year_by_country_question(prompt):
@@ -583,7 +605,7 @@ def main():
                     # Extract only past messages without the current question
                     past_messages = st.session_state.messages[:-1]
                     
-                    sql_query = get_sql_from_openai(prompt, schema, past_messages)
+                    sql_query = get_sql_from_openai(prompt, schema, past_messages, description)
 
                     with st.expander("Generated SQL Query"):
                         st.code(sql_query, language="sql")
