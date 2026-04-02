@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import os
 import re
 from history import get_conversation_history  # <-- Add the conversation history function
-
+from rag_fewshots import query_relevant_chunks
 # Load environment variables from .env file
 load_dotenv()
 
@@ -205,7 +205,7 @@ def get_description() -> str:
 
     return desc
 ###############################################################################
-def get_sql_from_openai(question, schema, past_messages, description):
+def get_sql_from_openai(question, schema, past_messages, description, relevant_chunks):
     # Fetch the conversation history to include it in the Prompt as context
     history_context = get_conversation_history(past_messages)
     
@@ -276,6 +276,9 @@ Your task:
 9. Ensure the query is optimized and handles edge cases properly.
 
 10. Return ONLY the SQL query, with no explanation and no markdown.
+
+RELEVANT EXAMPLES (for style guidance only - adapt, don't copy):
+{relevant_chunks}
 """
 
     response = llm.chat.completions.create(
@@ -604,8 +607,8 @@ def main():
                     st.write("📊 *Analyzing your database question...*")
                     # Extract only past messages without the current question
                     past_messages = st.session_state.messages[:-1]
-                    
-                    sql_query = get_sql_from_openai(prompt, schema, past_messages, description)
+                    relevant_chunks = query_relevant_chunks(prompt)
+                    sql_query = get_sql_from_openai(prompt, schema, past_messages, description, relevant_chunks)
 
                     with st.expander("Generated SQL Query"):
                         st.code(sql_query, language="sql")
