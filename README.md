@@ -77,6 +77,8 @@ DB_URL=postgresql://user:password@localhost:5432/database_name
 - **AZURE_OPENAI_API_VERSION**: API version (default: 2024-12-01-preview)
 - **AZURE_OPENAI_MODEL**: Model name (default: gpt-4o)
 - **AZURE_OPENAI_TIMEOUT**: Request timeout in seconds (default: 30)
+- **QDRANT_URL**= Your Qdrant URL
+- **QDRANT_API_KEY**: Your Qdrant API key
 - **DB_URL**: PostgreSQL connection string in format: `postgresql://user:password@host:port/database`
 
 ## Usage
