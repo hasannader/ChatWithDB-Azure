@@ -12,8 +12,9 @@ from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, HnswConfigDiff
 from qdrant_client.http.models import PayloadSchemaType
-
-
+from dotenv import load_dotenv
+load_dotenv()
+AZURE_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 # =========================================================
 # Load & Split Documents
 # =========================================================
