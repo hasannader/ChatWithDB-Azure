@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
 import re
-from history import get_conversation_history  # <-- Add the conversation history function
+from history import get_conversation_history  
 from rag_fewshots import query_relevant_chunks
 # Load environment variables from .env file
 load_dotenv()
