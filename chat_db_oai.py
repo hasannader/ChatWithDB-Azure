@@ -11,7 +11,7 @@ load_dotenv()
 
 # Configuration Constants
 DB_URL = os.getenv("DB_URL")
-AZURE_KEY = os.getenv("AZURE_KEY")
+AZURE_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 
 
 
